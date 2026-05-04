@@ -209,4 +209,147 @@ router.get('/history', async (req, res) => {
   }
 });
 
+// ── POST /api/ai/chat  (streaming SSE) ─────────────────────
+router.post('/chat', async (req, res) => {
+  try {
+    const apiKey = process.env.DEEPSEEK_API_KEY;
+    if (!apiKey || apiKey.startsWith('sk-xxx') || apiKey.startsWith('sk-45f5f73')) {
+      return res.status(503).json({ error: 'La clave de DeepSeek no está configurada.' });
+    }
+
+    const { message } = req.body;
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: 'Mensaje requerido.' });
+    }
+    if (message.trim().length > 1000) {
+      return res.status(400).json({ error: 'El mensaje es demasiado largo (máx. 1000 caracteres).' });
+    }
+
+    const userId = req.user.id;
+    const since  = new Date();
+    since.setDate(since.getDate() - 60);
+    const sinceStr = since.toISOString().split('T')[0];
+
+    // Gather a lightweight context summary (last 60 days)
+    const [userRes, symRes, moodRes, foodRes, periodRes] = await Promise.all([
+      db.query('SELECT username, average_cycle_length, average_period_length FROM users WHERE id=$1', [userId]),
+      db.query(`SELECT symptom_type, severity, date FROM symptoms WHERE user_id=$1 AND date >= $2 ORDER BY date DESC LIMIT 30`, [userId, sinceStr]),
+      db.query(`SELECT mood, energy_level, date FROM moods WHERE user_id=$1 AND date >= $2 ORDER BY date DESC LIMIT 20`, [userId, sinceStr]),
+      db.query(`SELECT meal_type, foods, date FROM food_logs WHERE user_id=$1 AND date >= $2 ORDER BY date DESC LIMIT 20`, [userId, sinceStr]),
+      db.query(`SELECT date, flow_intensity FROM period_days WHERE user_id=$1 AND date >= $2 ORDER BY date DESC LIMIT 10`, [userId, sinceStr]),
+    ]);
+
+    const user = userRes.rows[0] || {};
+    const symSummary    = symRes.rows.map(s => `${s.symptom_type}(${s.severity})`).join(', ')   || 'ninguno';
+    const moodSummary   = moodRes.rows.map(m => m.mood).join(', ')                               || 'ninguno';
+    const foodSummary   = foodRes.rows.map(f => (f.foods || []).join(', ')).filter(Boolean).slice(0, 10).join(' | ') || 'ninguno';
+    const periodSummary = periodRes.rows.map(p => p.date.toISOString().split('T')[0]).join(', ') || 'ninguno';
+
+    const systemPrompt =
+`Eres Luna 🌙, una asistente de salud menstrual experta, empática y científica. Respondes siempre en español con tono cálido y profesional. Usas emojis para estructurar. No eres médico; para síntomas graves siempre recomiendas consultar un profesional de salud.
+
+CONTEXTO DE LA USUARIA (últimos 60 días):
+• Ciclo promedio: ${user.average_cycle_length || 28} días | Período: ${user.average_period_length || 5} días
+• Síntomas recientes: ${symSummary}
+• Estado de ánimo reciente: ${moodSummary}
+• Alimentos registrados: ${foodSummary}
+• Días de período: ${periodSummary}
+
+Responde de forma concisa y útil. Si la pregunta no tiene relación con la salud menstrual/femenina, responde brevemente y redirige al tema.`;
+
+    // ── Setup SSE ─────────────────────────────────────────
+    res.setHeader('Content-Type',  'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection',    'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // disable nginx buffering
+    res.flushHeaders();
+
+    const payload = JSON.stringify({
+      model: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: message.trim() },
+      ],
+      max_tokens:  1024,
+      temperature: 0.7,
+      stream:      true,
+    });
+
+    const opts = {
+      hostname: 'api.deepseek.com',
+      path:     '/chat/completions',
+      method:   'POST',
+      headers:  {
+        'Content-Type':   'application/json',
+        'Authorization':  `Bearer ${apiKey}`,
+        'Content-Length': Buffer.byteLength(payload),
+      },
+    };
+
+    const deepReq = https.request(opts, (deepRes) => {
+      let buf = '';
+
+      deepRes.on('data', (chunk) => {
+        buf += chunk.toString('utf8');
+        const lines = buf.split('\n');
+        buf = lines.pop(); // keep partial last line
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          if (trimmed === 'data: [DONE]') {
+            res.write('data: [DONE]\n\n');
+            return;
+          }
+          if (!trimmed.startsWith('data: ')) continue;
+          try {
+            const parsed = JSON.parse(trimmed.slice(6));
+            const token  = parsed.choices?.[0]?.delta?.content;
+            if (token) res.write(`data: ${JSON.stringify({ t: token })}\n\n`);
+            // Check for API-level errors
+            if (parsed.error) {
+              res.write(`data: ${JSON.stringify({ error: parsed.error.message })}\n\n`);
+            }
+          } catch (_) { /* skip malformed chunk */ }
+        }
+      });
+
+      deepRes.on('end', () => {
+        res.write('data: [DONE]\n\n');
+        res.end();
+      });
+
+      deepRes.on('error', (err) => {
+        res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+        res.end();
+      });
+    });
+
+    deepReq.on('error', (err) => {
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+        res.end();
+      }
+    });
+
+    deepReq.setTimeout(60000, () => {
+      deepReq.destroy();
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ error: 'Tiempo de espera agotado (60s)' })}\n\n`);
+        res.end();
+      }
+    });
+
+    // Abort upstream request if client disconnects
+    req.on('close', () => { if (!deepReq.destroyed) deepReq.destroy(); });
+
+    deepReq.write(payload);
+    deepReq.end();
+
+  } catch (err) {
+    console.error('[AI chat]', err.message);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
