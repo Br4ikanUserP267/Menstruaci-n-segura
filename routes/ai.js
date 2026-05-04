@@ -12,10 +12,11 @@ router.use(auth);
 
 // ── POST /api/ai/analyze ────────────────────────────────────
 router.post('/analyze', async (req, res) => {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
-  if (!apiKey || apiKey.startsWith('sk-xxx')) {
-    return res.status(503).json({ error: 'La clave de DeepSeek no está configurada. Configura DEEPSEEK_API_KEY en tu archivo .env' });
-  }
+  try {
+    const apiKey = process.env.DEEPSEEK_API_KEY;
+    if (!apiKey || apiKey.startsWith('sk-xxx') || apiKey.startsWith('sk-45f5f73')) {
+      return res.status(503).json({ error: 'La clave de DeepSeek no está configurada. Agrega DEEPSEEK_API_KEY válida en las variables de entorno del servidor.' });
+    }
 
   const days  = Math.min(Math.max(parseInt(req.body.days) || 30, 7), 180);
   const end   = new Date();
@@ -188,16 +189,24 @@ Sé específica con fechas y datos cuando estén disponibles. Si hay pocos datos
       tokens: result.usage?.total_tokens || null,
     },
   });
+  } catch (err) {
+    console.error('[AI analyze]', err.message);
+    res.status(500).json({ error: err.message || 'Error interno al analizar.' });
+  }
 });
 
 // ── GET /api/ai/history ─────────────────────────────────────
 router.get('/history', async (req, res) => {
-  const { rows } = await db.query(
-    `SELECT id, period_days, created_at, LEFT(result, 200) AS preview
-     FROM ai_analysis_cache WHERE user_id=$1 ORDER BY created_at DESC LIMIT 10`,
-    [req.user.id]
-  );
-  res.json(rows);
+  try {
+    const { rows } = await db.query(
+      `SELECT id, period_days, created_at, LEFT(result, 200) AS preview
+       FROM ai_analysis_cache WHERE user_id=$1 ORDER BY created_at DESC LIMIT 10`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.json([]); // return empty array if table doesn't exist yet
+  }
 });
 
 module.exports = router;

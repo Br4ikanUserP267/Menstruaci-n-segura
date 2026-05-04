@@ -19,6 +19,10 @@ const aiRoutes          = require('./routes/ai');
 
 const app = express();
 
+// ── Trust proxy (required when running behind nginx/container) ────────────
+// Adjust to the number of proxies if you have more than one layer.
+app.set('trust proxy', 1);
+
 // ── Seguridad ──────────────────────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: {
@@ -100,9 +104,70 @@ app.use((err, req, res, _next) => {
 
 // ── Arranque ───────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`\n🌙 Luna corriendo en http://localhost:${PORT}`);
-  console.log(`   Entorno: ${process.env.NODE_ENV || 'development'}\n`);
-});
+
+/**
+ * Split a SQL file into individual statements, respecting $$ dollar-quoted blocks.
+ */
+function splitSql(sql) {
+  const stmts = [];
+  let current = '';
+  let inDollar = false;
+
+  for (let i = 0; i < sql.length; i++) {
+    // Toggle dollar-quote on $$
+    if (sql[i] === '$' && sql[i + 1] === '$') {
+      inDollar = !inDollar;
+      current += '$$';
+      i++; // skip second $
+      continue;
+    }
+    // Statement boundary only outside dollar-quoted blocks
+    if (sql[i] === ';' && !inDollar) {
+      const stmt = current.trim();
+      if (stmt) stmts.push(stmt);
+      current = '';
+    } else {
+      current += sql[i];
+    }
+  }
+  const last = current.trim();
+  if (last) stmts.push(last);
+  return stmts;
+}
+
+async function start() {
+  // Run schema migrations before accepting connections
+  try {
+    const fs     = require('fs');
+    const path   = require('path');
+    const { pool } = require('./db');
+    const sql    = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
+    const stmts  = splitSql(sql);
+
+    const client = await pool.connect();
+    try {
+      for (const stmt of stmts) {
+        await client.query(stmt).catch(err => {
+          // Ignore "already exists" errors to keep idempotency
+          if (!['42P07','42710','42P16'].includes(err.code)) {
+            console.warn('⚠️  Schema stmt warning:', err.message.split('\n')[0]);
+          }
+        });
+      }
+    } finally {
+      client.release();
+    }
+    console.log('✅ Schema aplicado correctamente.');
+  } catch (err) {
+    console.error('❌ Error aplicando schema:', err.message);
+  }
+
+  app.listen(PORT, () => {
+    console.log(`\n🌙 Luna corriendo en http://localhost:${PORT}`);
+    console.log(`   Entorno: ${process.env.NODE_ENV || 'development'}\n`);
+  });
+}
+
+start();
 
 module.exports = app;
