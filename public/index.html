@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Luna — Asistente de ciclo menstrual</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+<!-- ═══════════════ AUTH SCREEN ═══════════════ -->
+<div id="auth-screen" class="auth-screen hidden">
+  <div class="auth-bg">
+    <div class="auth-blob blob1"></div>
+    <div class="auth-blob blob2"></div>
+    <div class="auth-blob blob3"></div>
+  </div>
+
+  <!-- Login -->
+  <div id="login-panel" class="auth-panel">
+    <div class="auth-logo">🌙</div>
+    <h1 class="auth-title">Luna</h1>
+    <p class="auth-subtitle">Tu asistente de ciclo menstrual</p>
+
+    <form id="login-form" class="auth-form" novalidate>
+      <div class="form-group">
+        <label class="form-label">Usuario</label>
+        <div class="input-icon-wrap">
+          <i class="fa-solid fa-user input-icon"></i>
+          <input type="text" id="login-username" class="form-input" placeholder="tu_usuario" autocomplete="username" required />
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Contraseña</label>
+        <div class="input-icon-wrap">
+          <i class="fa-solid fa-lock input-icon"></i>
+          <input type="password" id="login-password" class="form-input" placeholder="••••••••" autocomplete="current-password" required />
+          <button type="button" class="pass-toggle" data-target="login-password"><i class="fa-solid fa-eye"></i></button>
+        </div>
+      </div>
+      <div id="login-error" class="auth-error hidden"></div>
+      <button type="submit" class="btn btn-primary btn-full" id="login-btn">
+        <span class="btn-text">Iniciar sesión</span>
+        <span class="btn-spinner hidden"><i class="fa-solid fa-spinner fa-spin"></i></span>
+      </button>
+    </form>
+
+    <p class="auth-switch">¿No tienes cuenta? <a href="#" id="go-register">Regístrate aquí</a></p>
+  </div>
+
+  <!-- Register -->
+  <div id="register-panel" class="auth-panel hidden">
+    <div class="auth-logo">🌙</div>
+    <h1 class="auth-title">Crear cuenta</h1>
+    <p class="auth-subtitle">Es gratis, solo toma un momento</p>
+
+    <form id="register-form" class="auth-form" novalidate>
+      <div class="form-group">
+        <label class="form-label">Usuario <small>(letras, números, guión bajo)</small></label>
+        <div class="input-icon-wrap">
+          <i class="fa-solid fa-user input-icon"></i>
+          <input type="text" id="reg-username" class="form-input" placeholder="mi_usuario" autocomplete="username" required />
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Contraseña <small>(mín. 6 caracteres)</small></label>
+        <div class="input-icon-wrap">
+          <i class="fa-solid fa-lock input-icon"></i>
+          <input type="password" id="reg-password" class="form-input" placeholder="••••••••" autocomplete="new-password" required />
+          <button type="button" class="pass-toggle" data-target="reg-password"><i class="fa-solid fa-eye"></i></button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Confirmar contraseña</label>
+        <div class="input-icon-wrap">
+          <i class="fa-solid fa-lock input-icon"></i>
+          <input type="password" id="reg-password2" class="form-input" placeholder="••••••••" autocomplete="new-password" required />
+        </div>
+      </div>
+      <div id="register-error" class="auth-error hidden"></div>
+      <button type="submit" class="btn btn-primary btn-full" id="register-btn">
+        <span class="btn-text">Crear cuenta</span>
+        <span class="btn-spinner hidden"><i class="fa-solid fa-spinner fa-spin"></i></span>
+      </button>
+    </form>
+
+    <p class="auth-switch">¿Ya tienes cuenta? <a href="#" id="go-login">Inicia sesión</a></p>
+  </div>
+</div>
+
+<!-- ═══════════════ ONBOARDING ═══════════════ -->
+<div id="onboarding-screen" class="onboarding-screen hidden">
+  <div class="onboarding-card">
+    <div class="onboarding-progress">
+      <div class="onboarding-prog-bar" id="ob-prog-bar" style="width:25%"></div>
+    </div>
+    <div class="onboarding-steps">
+
+      <!-- Paso 1 -->
+      <div class="ob-step active" data-step="1">
+        <div class="ob-icon">👋</div>
+        <h2>¡Bienvenida!</h2>
+        <p>Vamos a configurar tu perfil para darte predicciones más precisas.</p>
+        <button class="btn btn-primary ob-next" data-next="2">Comenzar</button>
+      </div>
+
+      <!-- Paso 2 -->
+      <div class="ob-step" data-step="2">
+        <div class="ob-icon">📅</div>
+        <h2>¿Cuándo fue tu último período?</h2>
+        <p>Esto nos ayuda a predecir tu próximo período.</p>
+        <div class="form-group">
+          <input type="date" id="ob-last-period" class="form-input" max="" />
+        </div>
+        <button class="btn btn-primary ob-next" data-next="3">Siguiente</button>
+      </div>
+
+      <!-- Paso 3 -->
+      <div class="ob-step" data-step="3">
+        <div class="ob-icon">🔄</div>
+        <h2>¿Cuánto dura tu ciclo?</h2>
+        <p>El ciclo se cuenta desde el primer día de tu período hasta el día anterior al siguiente.</p>
+        <div class="ob-options" id="ob-cycle-options">
+          <button class="ob-opt" data-value="24">24 días</button>
+          <button class="ob-opt" data-value="26">26 días</button>
+          <button class="ob-opt selected" data-value="28">28 días</button>
+          <button class="ob-opt" data-value="30">30 días</button>
+          <button class="ob-opt" data-value="32">32 días</button>
+          <button class="ob-opt" data-value="35">35 días</button>
+        </div>
+        <p class="ob-custom-label">O indica el número exacto:</p>
+        <input type="number" id="ob-cycle-custom" class="form-input" min="15" max="60" placeholder="28" style="width:100px;text-align:center" />
+        <button class="btn btn-primary ob-next" data-next="4">Siguiente</button>
+      </div>
+
+      <!-- Paso 4 -->
+      <div class="ob-step" data-step="4">
+        <div class="ob-icon">🩸</div>
+        <h2>¿Cuántos días dura tu menstruación?</h2>
+        <div class="ob-options" id="ob-period-options">
+          <button class="ob-opt" data-value="2">2 días</button>
+          <button class="ob-opt" data-value="3">3 días</button>
+          <button class="ob-opt" data-value="4">4 días</button>
+          <button class="ob-opt selected" data-value="5">5 días</button>
+          <button class="ob-opt" data-value="6">6 días</button>
+          <button class="ob-opt" data-value="7">7 días</button>
+        </div>
+        <button class="btn btn-primary ob-next" data-next="finish">Finalizar</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ APP PRINCIPAL ═══════════════ -->
+<div id="app" class="app-layout hidden">
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-logo">🌙</span>
+      <span class="sidebar-title">Luna</span>
+      <button class="sidebar-close" id="sidebar-close"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="#dashboard"   class="nav-item active" data-page="dashboard">
+        <i class="fa-solid fa-house"></i><span>Inicio</span>
+      </a>
+      <a href="#calendar"    class="nav-item" data-page="calendar">
+        <i class="fa-solid fa-calendar-days"></i><span>Calendario</span>
+      </a>
+      <a href="#log"         class="nav-item" data-page="log">
+        <i class="fa-solid fa-pen-to-square"></i><span>Registrar hoy</span>
+      </a>
+      <a href="#medications" class="nav-item" data-page="medications">
+        <i class="fa-solid fa-pills"></i><span>Medicamentos</span>
+        <span class="nav-badge hidden" id="med-badge">0</span>
+      </a>
+      <a href="#stats"       class="nav-item" data-page="stats">
+        <i class="fa-solid fa-chart-line"></i><span>Estadísticas</span>
+      </a>
+      <a href="#notes"       class="nav-item" data-page="notes">
+        <i class="fa-solid fa-book"></i><span>Diario</span>
+      </a>
+      <a href="#profile"     class="nav-item" data-page="profile">
+        <i class="fa-solid fa-gear"></i><span>Perfil</span>
+      </a>
+      <a href="#ai"           class="nav-item" data-page="ai">
+        <i class="fa-solid fa-robot"></i><span>Análisis IA</span>
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <button class="nav-item nav-logout" id="logout-btn">
+        <i class="fa-solid fa-right-from-bracket"></i><span>Cerrar sesión</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main-area">
+    <!-- Header -->
+    <header class="app-header">
+      <button class="hamburger" id="hamburger-btn"><i class="fa-solid fa-bars"></i></button>
+      <div class="header-title" id="header-title">Inicio</div>
+      <div class="header-user">
+        <span id="header-username" class="header-username"></span>
+        <div class="header-avatar" id="header-avatar">U</div>
+      </div>
+    </header>
+
+    <!-- Content -->
+    <main class="app-content" id="app-content">
+      <div class="page-loading">
+        <i class="fa-solid fa-spinner fa-spin"></i>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ═══════════════ MODAL GLOBAL ═══════════════ -->
+<div class="modal-overlay hidden" id="modal-overlay">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <h3 class="modal-title" id="modal-title"></h3>
+      <button class="modal-close" id="modal-close"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer"></div>
+  </div>
+</div>
+
+<!-- ═══════════════ TOAST ═══════════════ -->
+<div id="toast-container" class="toast-container"></div>
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/utils.js"></script>
+<script src="/js/dashboard.js"></script>
+<script src="/js/calendar.js"></script>
+<script src="/js/log.js"></script>
+<script src="/js/medications.js"></script>
+<script src="/js/stats.js"></script>
+<script src="/js/notes.js"></script>
+<script src="/js/profile.js"></script>
+<script src="/js/ai.js"></script>
+<script src="/js/app.js"></script>
+
+</body>
+</html>
